@@ -4,8 +4,6 @@ A simple running analytics dashboard that connects to Strava's API to track trai
 
 Built while learning data analysis as part of my transition from Product Manager to Product Analyst.
 
-![Dashboard](assets/dashboard_preview.png)
-
 ## Why I created this
 
 I'm recently aimed to pick up running with some consistancy. I want to use this dashboard to:
