@@ -37,9 +37,22 @@ def create_weekly_volume_chart(df):
     return fig
 
 def create_pace_trend_chart(df):
-    """Create pace trend chart"""
+    """Create pace trend chart with HR zone colors"""
+    # Add color column based on heart rate zones
+    df['hr_zone_color'] = df['average_heartrate'].apply(
+        lambda hr: 'Easy (HR < 150)' if pd.notna(hr) and hr < 150 
+        else 'Moderate (HR ≥ 150)' if pd.notna(hr) 
+        else 'No HR Data'
+    )
+    
     fig = px.scatter(df, x='date', y='pace_min_per_km',
                      size='distance_km',
+                     color='hr_zone_color',
+                     color_discrete_map={
+                         'Easy (HR < 150)': 'green',
+                         'Moderate (HR ≥ 150)': 'orange',
+                         'No HR Data': 'lightgray'
+                     },
                      hover_data=['distance_km', 'average_heartrate'],
                      title='Pace Trends (from June 8th)',
                      labels={'pace_min_per_km': 'Pace (min/km)', 'date': 'Date'})
@@ -58,19 +71,6 @@ def create_pace_trend_chart(df):
     
     fig.update_layout(height=400)
     return fig
-
-def create_summary_stats(df):
-    """Create summary statistics"""
-    recent_weeks = df.groupby(df['date'].dt.to_period('W'))['distance_km'].sum()
-    
-    stats = {
-        'total_runs': len(df),
-        'total_distance': df['distance_km'].sum(),
-        'avg_weekly': recent_weeks.mean(),
-        'current_pace': df['pace_min_per_km'].tail(5).mean(),
-        'target_gap': 48 - recent_weeks.mean()
-    }
-    return stats
 
 # App layout
 app.layout = html.Div([
