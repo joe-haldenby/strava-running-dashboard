@@ -105,6 +105,7 @@ def create_running_dataframe(runs):
             run_data = {
                 'date': run['start_date'][:10],
                 'name': run['name'],
+                'start_datetime': run['start_date'],
                 'distance_km': round(run['distance'] / 1000, 2),
                 'duration_min': round(run['moving_time'] / 60, 1),
                 'elevation_gain': run['total_elevation_gain'],

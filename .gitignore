@@ -2,10 +2,6 @@
 config.py
 strava_tokens.json
 
-# Data files (personal running data)
-running_data.csv
-*.csv
-
 # Generated HTML files
 *.html
 
