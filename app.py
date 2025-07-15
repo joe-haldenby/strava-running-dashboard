@@ -64,6 +64,8 @@ def load_running_data():
     if not df.empty:
         df['date'] = pd.to_datetime(df['date'])
         print(f"Data processed successfully, date range: {df['date'].min()} to {df['date'].max()}")
+        print(f"Available run types: {df['run_type'].unique().tolist()}")
+        print(f"Available columns: {df.columns.tolist()}")
     
     return df
 
@@ -101,13 +103,14 @@ def create_weekly_volume_chart(df):
     return fig
 
 def create_pace_trend_chart(df):
-    """Pace trends by run type with training intensity order"""
+    """Pace trends by run type with training intensity order - robust for missing run types"""
     if df.empty:
         fig = go.Figure()
         fig.add_annotation(text="No data available", x=0.5, y=0.5, showarrow=False)
         fig.update_layout(height=450, title="Pace Trends by Run Type")
         return fig
         
+    # Define run type colors (complete mapping)
     run_type_colors = {
         'Recovery': COLORS['dark_green'],
         'General Aerobic': COLORS['light_green'],
@@ -118,20 +121,36 @@ def create_pace_trend_chart(df):
         'Other': COLORS['grey']
     }
     
-    intensity_order = ['Recovery', 'General Aerobic', 'Endurance', 'Lactate Threshold', 'VO₂ Max Intervals', 'Race', 'Other']
-    df['run_type'] = pd.Categorical(df['run_type'], categories=intensity_order, ordered=True)
+    # Define full intensity order but only use existing run types
+    full_intensity_order = ['Recovery', 'General Aerobic', 'Endurance', 'Lactate Threshold', 'VO₂ Max Intervals', 'Race', 'Other']
+    existing_run_types = df['run_type'].unique()
+    intensity_order = [rt for rt in full_intensity_order if rt in existing_run_types]
+    
+    # Only create categorical if we have run types
+    if len(intensity_order) > 0:
+        df['run_type'] = pd.Categorical(df['run_type'], categories=intensity_order, ordered=True)
+    
+    # Filter colors to only existing run types
+    existing_colors = {rt: run_type_colors[rt] for rt in existing_run_types if rt in run_type_colors}
     
     fig = px.scatter(df, x='date', y='pace_min_per_km',
                      color='run_type',
-                     color_discrete_map=run_type_colors,
-                     category_orders={'run_type': intensity_order},
-                     hover_data=['distance_km', 'average_heartrate'],
+                     color_discrete_map=existing_colors,
+                     category_orders={'run_type': intensity_order} if len(intensity_order) > 0 else None,
+                     hover_data=['distance_km', 'average_heartrate'] if 'average_heartrate' in df.columns else ['distance_km'],
                      title='Pace Trends by Run Type',
                      labels={'pace_min_per_km': 'Pace (min/km)', 'date': 'Date'})
     
     fig.update_yaxes(range=[3.5, None])
+    
+    # Update hover template based on available columns
+    if 'average_heartrate' in df.columns:
+        hover_template = '<b>Date:</b> %{x}<br><b>Pace:</b> %{y} min/km<br><b>Distance:</b> %{customdata[0]} km<br><b>Average Heart Rate:</b> %{customdata[1]} bpm<br><extra></extra>'
+    else:
+        hover_template = '<b>Date:</b> %{x}<br><b>Pace:</b> %{y} min/km<br><b>Distance:</b> %{customdata[0]} km<br><extra></extra>'
+    
     fig.update_traces(
-        hovertemplate='<b>Date:</b> %{x}<br><b>Pace:</b> %{y} min/km<br><b>Distance:</b> %{customdata[0]} km<br><b>Average Heart Rate:</b> %{customdata[1]} bpm<br><extra></extra>',
+        hovertemplate=hover_template,
         marker=dict(size=12)
     )
     
@@ -149,11 +168,12 @@ def create_pace_trend_chart(df):
     return fig
 
 def create_weather_impact_chart(df):
-    """Weather impact bar chart by temperature bins"""
+    """Weather impact bar chart by temperature bins - robust for missing weather data"""
     if df.empty or 'feels_like_c' not in df.columns:
         fig = go.Figure()
         fig.add_annotation(text="No weather data available", x=0.5, y=0.5, showarrow=False)
-        fig.update_layout(height=450, title="Pace by Weather Conditions")
+        fig.update_layout(height=450, title="Pace by Weather Conditions", 
+                         plot_bgcolor='#f8f9fa', paper_bgcolor='#f8f9fa')
         return fig
         
     all_runs = df.dropna(subset=['feels_like_c'])
@@ -179,6 +199,14 @@ def create_weather_impact_chart(df):
         'date': 'count'
     }).rename(columns={'date': 'run_count'}).reset_index()
     
+    # Check if we have any data after grouping
+    if len(weekly_temp_data) == 0:
+        fig = go.Figure()
+        fig.add_annotation(text="No sufficient weather data for analysis", x=0.5, y=0.5, showarrow=False)
+        fig.update_layout(height=450, title="Pace by Weather Conditions", 
+                         plot_bgcolor='#f8f9fa', paper_bgcolor='#f8f9fa')
+        return fig
+    
     temp_colors = {'Cold': '#1976D2', 'Cool': '#64B5F6', 'Warm': '#FF9800', 'Hot': '#F44336'}
     
     fig = px.bar(weekly_temp_data, x='week', y='pace_min_per_km', 
@@ -201,11 +229,12 @@ def create_weather_impact_chart(df):
     return fig
 
 def create_pb_tracking_chart(df):
-    """PB tracking with 10K and 5K lines"""
+    """PB tracking with 10K and 5K lines - robust for missing PB data"""
     if df.empty:
         fig = go.Figure()
         fig.add_annotation(text="No data available", x=0.5, y=0.5, showarrow=False)
-        fig.update_layout(height=450, title="PB Tracking")
+        fig.update_layout(height=450, title="PB Tracking", 
+                         plot_bgcolor='#f8f9fa', paper_bgcolor='#f8f9fa')
         return fig
         
     if '5k_pace_min_per_km' not in df.columns and '10k_pace_min_per_km' not in df.columns:
@@ -216,11 +245,13 @@ def create_pb_tracking_chart(df):
         return fig
     
     fig = go.Figure()
+    has_data = False
     
     # 10K PBs first in legend
     if '10k_pace_min_per_km' in df.columns:
         tenK_data = df[df['10k_pace_min_per_km'].notna()].copy()
         if len(tenK_data) > 0:
+            has_data = True
             tenK_data = tenK_data.sort_values('date')
             tenK_data['pb_pace'] = tenK_data['10k_pace_min_per_km'].cummin()
             tenK_data['race_time_min'] = tenK_data['pb_pace'] * 10
@@ -237,6 +268,7 @@ def create_pb_tracking_chart(df):
     if '5k_pace_min_per_km' in df.columns:
         fiveK_data = df[df['5k_pace_min_per_km'].notna()].copy()
         if len(fiveK_data) > 0:
+            has_data = True
             fiveK_data = fiveK_data.sort_values('date')
             fiveK_data['pb_pace'] = fiveK_data['5k_pace_min_per_km'].cummin()
             fiveK_data['race_time_min'] = fiveK_data['pb_pace'] * 5
@@ -248,6 +280,10 @@ def create_pb_tracking_chart(df):
                 hovertemplate='<b>5K PB</b><br>Date: %{x}<br>Pace: %{y:.2f} min/km<br>Time: %{customdata:.1f} minutes<br><extra></extra>',
                 customdata=fiveK_data['race_time_min']
             ))
+    
+    # If no PB data found, show message
+    if not has_data:
+        fig.add_annotation(text="No PB data available yet", x=0.5, y=0.5, showarrow=False)
     
     fig.update_layout(
         xaxis_title='Date', yaxis_title='Pace (min/km)', height=450, hovermode='x unified',
