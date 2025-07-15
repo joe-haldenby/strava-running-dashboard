@@ -1,5 +1,5 @@
 import dash
-from dash import dcc, html, Input, Output, callback
+from dash import dcc, html, Input, Output
 import dash_auth
 import pandas as pd
 import plotly.express as px
@@ -34,25 +34,37 @@ COLORS = {
 
 def load_running_data():
     """Load and prepare running data with absolute paths for deployment"""
+    import os
+    
+    # Debug: Print current directory and files
+    print("Current directory:", os.getcwd())
+    print("Files in directory:", os.listdir('.'))
+    
     try:
-        # Use absolute paths for deployment environment
-        base_path = os.path.dirname(os.path.abspath(__file__))
-        classified_path = os.path.join(base_path, 'classified_running_data.csv')
-        df = pd.read_csv(classified_path)
+        # Try direct file names first (Railway should find them in root)
+        df = pd.read_csv('classified_running_data.csv')
+        print(f"Successfully loaded classified_running_data.csv with {len(df)} rows")
     except FileNotFoundError:
+        print("classified_running_data.csv not found, trying running_data.csv")
         try:
-            # Fallback to regular data
-            running_path = os.path.join(base_path, 'running_data.csv')
-            df = pd.read_csv(running_path)
+            df = pd.read_csv('running_data.csv')
             df['run_type'] = 'General Aerobic'  # Default classification
+            print(f"Successfully loaded running_data.csv with {len(df)} rows")
         except FileNotFoundError:
-            # Empty dataframe as final fallback
+            print("No CSV files found, creating empty dataframe")
             return pd.DataFrame({
                 'date': [], 'distance_km': [], 'pace_min_per_km': [], 'run_type': []
             })
+    except Exception as e:
+        print(f"Error loading CSV files: {e}")
+        return pd.DataFrame({
+            'date': [], 'distance_km': [], 'pace_min_per_km': [], 'run_type': []
+        })
     
     if not df.empty:
         df['date'] = pd.to_datetime(df['date'])
+        print(f"Data processed successfully, date range: {df['date'].min()} to {df['date'].max()}")
+    
     return df
 
 def create_weekly_volume_chart(df):
@@ -300,7 +312,7 @@ app.layout = html.Div([
     ], style={'max-width': '1400px', 'margin': '0 auto', 'padding': '30px'})
 ])
 
-@callback(
+@app.callback(
     [Output('weekly-volume-chart', 'figure'),
      Output('pace-trend-chart', 'figure'),
      Output('weather-impact-chart', 'figure'),
